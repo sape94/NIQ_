@@ -1,0 +1,8 @@
+streamlit-option-menu
+streamlit-extras
+Image
+regex
+pandas
+plotly_express
+openpyxl
+tabulate
