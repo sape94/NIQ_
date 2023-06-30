@@ -227,7 +227,7 @@ if selected == 'Home':
         {app_5_topic}</div>''',
         unsafe_allow_html=True)
     app_5_cap = f'''
-    By uploading a Dataframe you can sample it by pselecting one of the two
+    By uploading a Dataframe you can sample it by selecting one of the two
     main paramaters, and their specifications.
     '''
     st.caption(
