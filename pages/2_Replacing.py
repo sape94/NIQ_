@@ -70,24 +70,16 @@ if selected == 'Replacing':
     st.write(
         'Please provide Dataframes such that the Master Dataframe contains the Working Dataframe.')
     st.write('')
-    with st.expander('Upload the CSV or XLSX file that contains the  **Master Dataframe**:'):
+    with st.expander('Upload the CSV file that contains the  **Master Dataframe**:'):
         uploaded_file = st.file_uploader("Choose a file",
-                                         type=['csv', 'xlsx'],
+                                         type=['csv'],
                                          key='master_df'
                                          )
         if uploaded_file is not None:
-            try:
-                o_df = pd.read_csv(uploaded_file, encoding='UTF8')
-            except:
-                o_df = pd.read_excel(uploaded_file, encoding='UTF8')
-
-            try:
-                file_name_df = uploaded_file.name.replace('.csv', '')
-            except:
-                try:
-                    file_name_df = uploaded_file.name.replace('.xlsx', '')
-                except:
-                    pass
+            o_df = pd.read_csv(uploaded_file, encoding='UTF8')
+            
+            file_name_df = uploaded_file.name.replace('.csv', '')
+            
             o_df = cache_df(o_df)
             st.write(o_df)
         st.caption('You can collapse this section if you want.')
