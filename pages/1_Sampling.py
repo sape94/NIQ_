@@ -232,7 +232,7 @@ if selected == 'Sampling':
                 sort_col_list = st.multiselect(
                     'This would be the column that uniquely identifies the items of the Dataframe.', o_df_cols, max_selections=1)
                 if sort_col_list == []:
-                    st.caption('<p style="color: #2e6ef7;">You must select the identifier column if you want to continue.</p>',
+                    st.caption('<p style="color: #2e6ef7;">You should select the identifier column if you want your Dataframe to be sorted.</p>',
                                unsafe_allow_html=True)
                     sort_col = ''
                     p_df = o_df
@@ -243,193 +243,224 @@ if selected == 'Sampling':
                     sort_col = sort_col_list[0]
                     p_df = o_df.sort_values(sort_col)
 
-                    st.write('')
-                    st.write('Select the **structure** parameters column(s):')
-                    p_df_cols = [
-                        item for item in o_df_cols if item != sort_col]
-                    par_col_list = st.multiselect(
-                        'This would be the parameters that will define the structure of the Dataframe for stratification.', p_df_cols)
-                    if par_col_list == []:
-                        st.caption('<p style="color: #2e6ef7;">You must select the parameters column(s) if you want to continue.</p>',
-                                   unsafe_allow_html=True)
-                        grouped_df = p_df
-                        pivot_df = grouped_df
-                        pivot_df_2 = pivot_df
-                    if par_col_list != []:
-                        grouped_df = p_df.groupby(
-                            par_col_list).size().reset_index(name='Count')
+                st.write('')
+                st.write('Select the **structure** parameters column(s):')
+                p_df_cols = [
+                    item for item in o_df_cols if item != sort_col]
+                par_col_list = st.multiselect(
+                    'This would be the parameters that will define the structure of the Dataframe for stratification.', p_df_cols)
+                if par_col_list == []:
+                    st.caption('<p style="color: #2e6ef7;">You must select the parameters column(s) if you want to continue.</p>',
+                               unsafe_allow_html=True)
+                    grouped_df = p_df
+                    pivot_df = grouped_df
+                    pivot_df_2 = pivot_df
+                if par_col_list != []:
+                    grouped_df = p_df.groupby(
+                        par_col_list).size().reset_index(name='Count')
 
+                    st.write('')
+                    feature_op_ans = st.radio('Do you want to select a feature column?',
+                                              ('No.',
+                                               'Yes.'))
+                    if feature_op_ans == 'No.':
+                        pivot_df = grouped_df
+                        w_pivot_df = pivot_df.copy()
+                        for column in pivot_df.columns:
+                            if column == 'Count':
+                                weight_column_name = f'Weight(%)'
+                                s_s_col_name = f'Sample_size_by_weight'
+                                column_feature = column
+                                w_pivot_df[column_feature] = pivot_df[column]
+                                w_pivot_df[weight_column_name] = np.round(
+                                    (pivot_df[column] / N) * 100, 4)
+                                w_pivot_df[s_s_col_name] = np.round(
+                                    (pivot_df[column] / N) * n)
+                        st.write(
+                            'Weighted Dataframe pivot given the selected structure:')
+                        st.write(w_pivot_df)
+                        pivot_structure_sampled_df_csv = w_pivot_df.to_csv(
+                            index=False)
+                        coldos_pivot_1, coldos_pivot_2 = st.columns(
+                            2, gap='medium')
+
+                        with coldos_pivot_2:
+                            st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
+                                               data=pivot_structure_sampled_df_csv,
+                                               file_name=f'PIVOT_STRUCTURE_{file_name_df}.csv',
+                                               mime='text/csv')
+                        pre_est_samp_df = pd.DataFrame(columns=o_df_cols)
+                        o_l_df = o_df.copy()
                         st.write('')
-                        feature_op_ans = st.radio('Do you want to select a feature column?',
-                                                  ('No.',
-                                                   'Yes.'))
-                        if feature_op_ans == 'No.':
-                            pivot_df = grouped_df
-                            w_pivot_df = pivot_df.copy()
-                            for column in pivot_df.columns:
-                                if column == 'Count':
-                                    weight_column_name = f'Weight(%)'
-                                    s_s_col_name = f'Sample_size_by_weight'
-                                    column_feature = column
-                                    w_pivot_df[column_feature] = pivot_df[column]
-                                    w_pivot_df[weight_column_name] = np.round(
-                                        (pivot_df[column] / N) * 100, 4)
-                                    w_pivot_df[s_s_col_name] = np.round(
-                                        (pivot_df[column] / N) * n)
+                        for _, row in w_pivot_df.iterrows():
+                            temp_indices_list = []
+                            n_temp = int(row['Sample_size_by_weight'])
+                            filt_w_pivot_df = o_l_df.loc[(
+                                o_l_df[par_col_list] == row[par_col_list]).all(axis=1)]
+                            incomplete_est_samp_rows = filt_w_pivot_df.sample(
+                                n=n_temp)
+                            pre_est_samp_df = pd.concat(
+                                [pre_est_samp_df, incomplete_est_samp_rows])
+                            temp_indices_list.extend(
+                                incomplete_est_samp_rows.index.tolist())
+                            o_l_df = o_l_df.drop(temp_indices_list)
+                        o_merge_pre_est_df = pd.merge(
+                            o_df, pre_est_samp_df, how='left', indicator=True)
+                        o_minus_pre_est_df = o_merge_pre_est_df[o_merge_pre_est_df['_merge'] == 'left_only'].drop(
+                            columns='_merge')
+                        a_auxiliar_df = w_pivot_df['Sample_size_by_weight'].value_counts(
+                        ).sort_index().reset_index()
+                        a_auxiliar_df.columns = [
+                            'Sample_size_by_weight', 'Count']
+                        d_auxiliar_df = a_auxiliar_df.sort_values(
+                            'Sample_size_by_weight', ascending=False)
+                        aux_eval = pre_est_samp_df.shape[0] - n
+                        if aux_eval < 0:
+                            sub_a_auxiliar = pd.DataFrame(
+                                columns=a_auxiliar_df.columns)
+                            temp_a_auxiliar_count = 0
+                            for _, row in a_auxiliar_df.iterrows():
+                                count = row['Count']
+                                temp_a_auxiliar_count = temp_a_auxiliar_count + count
+                                sub_a_auxiliar = pd.concat(
+                                    [sub_a_auxiliar, row.to_frame().T])
+                                if temp_a_auxiliar_count >= abs(aux_eval):
+                                    break
+                            sub_a_auxiliar = sub_a_auxiliar.reset_index(
+                                drop=True)
+                            values_a_filter = sub_a_auxiliar['Sample_size_by_weight'].tolist(
+                            )
+                            a_filt_w_pivot = w_pivot_df[w_pivot_df['Sample_size_by_weight'].isin(
+                                values_a_filter)].sample(n=abs(aux_eval))
+                            to_fill_a_w_pivot = pd.DataFrame()
+                            for _, row in a_filt_w_pivot.iterrows():
+                                temp_fill = o_minus_pre_est_df.loc[(
+                                    o_minus_pre_est_df[par_col_list] == row[par_col_list]).all(axis=1)].sample(n=1)
+                                to_fill_a_w_pivot = pd.concat(
+                                    [to_fill_a_w_pivot, temp_fill])
+                            est_samp_df = pd.concat(
+                                [pre_est_samp_df, to_fill_a_w_pivot])
                             st.write(
-                                'Weighted Dataframe pivot given the selected structure:')
-                            st.write(w_pivot_df)
-                            pivot_structure_sampled_df_csv = w_pivot_df.to_csv(
+                                'Sampled Dataframe given the selected structure:')
+                            st.write(est_samp_df)
+                            # st.write(est_samp_df.shape)
+                            structure_sampled_l_df_csv = est_samp_df.to_csv(
                                 index=False)
-                            coldos_pivot_1, coldos_pivot_2 = st.columns(
+                            coldos_est_l_1, coldos_est_l_2 = st.columns(
                                 2, gap='medium')
 
-                            with coldos_pivot_2:
+                            with coldos_est_l_2:
                                 st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
-                                                   data=pivot_structure_sampled_df_csv,
-                                                   file_name=f'PIVOT_STRUCTURE_{file_name_df}.csv',
+                                                   data=structure_sampled_l_df_csv,
+                                                   file_name=f'SAMPLED_STRUCTURE_{file_name_df}.csv',
                                                    mime='text/csv')
-                            pre_est_samp_df = pd.DataFrame(columns=o_df_cols)
-                            o_l_df = o_df.copy()
-                            st.write('')
-                            for _, row in w_pivot_df.iterrows():
-                                temp_indices_list = []
-                                n_temp = int(row['Sample_size_by_weight'])
-                                filt_w_pivot_df = o_l_df.loc[(
-                                    o_l_df[par_col_list] == row[par_col_list]).all(axis=1)]
-                                incomplete_est_samp_rows = filt_w_pivot_df.sample(
-                                    n=n_temp)
-                                pre_est_samp_df = pd.concat(
-                                    [pre_est_samp_df, incomplete_est_samp_rows])
-                                temp_indices_list.extend(
-                                    incomplete_est_samp_rows.index.tolist())
-                                o_l_df = o_l_df.drop(temp_indices_list)
-                            o_merge_pre_est_df = pd.merge(
-                                o_df, pre_est_samp_df, how='left', indicator=True)
-                            o_minus_pre_est_df = o_merge_pre_est_df[o_merge_pre_est_df['_merge'] == 'left_only'].drop(
+                        if aux_eval > 0:
+                            sub_d_auxiliar = pd.DataFrame(
+                                columns=d_auxiliar_df.columns)
+                            temp_d_auxiliar_count = 0
+                            for _, row in d_auxiliar_df.iterrows():
+                                count = row['Count']
+                                temp_d_auxiliar_count = temp_d_auxiliar_count + count
+                                sub_d_auxiliar = pd.concat(
+                                    [sub_d_auxiliar, row.to_frame().T])
+                                if temp_d_auxiliar_count >= abs(aux_eval):
+                                    break
+                            sub_d_auxiliar = sub_d_auxiliar.reset_index(
+                                drop=True)
+                            values_d_filter = sub_d_auxiliar['Sample_size_by_weight'].tolist(
+                            )
+                            d_filt_w_pivot = w_pivot_df[w_pivot_df['Sample_size_by_weight'].isin(
+                                values_d_filter)].sample(n=abs(aux_eval))
+                            to_rem_d_w_pivot = pd.DataFrame()
+                            for _, row in d_filt_w_pivot.iterrows():
+                                temp_rem = pre_est_samp_df.loc[(
+                                    pre_est_samp_df[par_col_list] == row[par_col_list]).all(axis=1)].sample(n=1)
+                                to_rem_d_w_pivot = pd.concat(
+                                    [to_rem_d_w_pivot, temp_rem])
+                            pre_merge_to_rem = pd.merge(
+                                pre_est_samp_df, to_rem_d_w_pivot, how='left', indicator=True)
+                            est_samp_df = pre_merge_to_rem[pre_merge_to_rem['_merge'] == 'left_only'].drop(
                                 columns='_merge')
-                            a_auxiliar_df = w_pivot_df['Sample_size_by_weight'].value_counts(
-                            ).sort_index().reset_index()
-                            a_auxiliar_df.columns = [
-                                'Sample_size_by_weight', 'Count']
-                            d_auxiliar_df = a_auxiliar_df.sort_values(
-                                'Sample_size_by_weight', ascending=False)
-                            aux_eval = pre_est_samp_df.shape[0] - n
-                            if aux_eval < 0:
-                                sub_a_auxiliar = pd.DataFrame(
-                                    columns=a_auxiliar_df.columns)
-                                temp_a_auxiliar_count = 0
-                                for _, row in a_auxiliar_df.iterrows():
-                                    count = row['Count']
-                                    temp_a_auxiliar_count = temp_a_auxiliar_count + count
-                                    sub_a_auxiliar = pd.concat(
-                                        [sub_a_auxiliar, row.to_frame().T])
-                                    if temp_a_auxiliar_count >= abs(aux_eval):
-                                        break
-                                sub_a_auxiliar = sub_a_auxiliar.reset_index(
-                                    drop=True)
-                                values_a_filter = sub_a_auxiliar['Sample_size_by_weight'].tolist(
+                            st.write(
+                                'Sampled Dataframe given the selected structure:')
+                            st.write(est_samp_df)
+                            structure_sampled_g_df_csv = est_samp_df.to_csv(
+                                index=False)
+                            coldos_est_g_1, coldos_est_g_2 = st.columns(
+                                2, gap='medium')
+
+                            with coldos_est_g_2:
+                                st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
+                                                   data=structure_sampled_g_df_csv,
+                                                   file_name=f'SAMPLED_STRUCTURE_{file_name_df}.csv',
+                                                   mime='text/csv')
+                        if aux_eval == 0:
+                            est_samp_df = pre_est_samp_df
+                            st.write(
+                                'Sampled Dataframe given the selected structure:')
+                            st.write(est_samp_df)
+                            structure_sampled_e_df_csv = est_samp_df.to_csv(
+                                index=False)
+                            coldos_est_e_1, coldos_est_e_2 = st.columns(
+                                2, gap='medium')
+
+                            with coldos_est_e_2:
+                                st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
+                                                   data=structure_sampled_e_df_csv,
+                                                   file_name=f'SAMPLED_STRUCTURE_{file_name_df}.csv',
+                                                   mime='text/csv')
+                    if feature_op_ans == 'Yes.':
+                        st.write('Select the **feature** column:')
+                        feat_col_list = st.multiselect(
+                            'This would be the column that determines the features of the Dataframe.', par_col_list, max_selections=1)
+                        if feat_col_list == []:
+                            st.caption('<p style="color: #2e6ef7;">You must select the feature column if you want to continue.</p>',
+                                       unsafe_allow_html=True)
+                            pivot_df = grouped_df
+                            pivot_df_2 = pivot_df
+                        if feat_col_list != []:
+                            features_ans = st.radio('Do you want to select only specific features?',
+                                                    ('No.',
+                                                     'Yes.'))
+                            feature = feat_col_list[0]
+                            par_featureless = [
+                                item for item in par_col_list if item != feature]
+                            features_list = grouped_df[feature].unique(
+                            ).tolist()
+                            pivot_cols = par_featureless + features_list
+                            if features_ans == 'No.':
+                                pivot_sum = 0  # Verificación de suma
+                                pivot_df = grouped_df.pivot_table(
+                                    index=par_featureless, columns=feature, values='Count', fill_value=0).reset_index()
+                                pivot_df = pivot_df.reindex(
+                                    columns=pivot_cols)
+                                pivot_df_2 = pivot_df[par_featureless].copy(
                                 )
-                                a_filt_w_pivot = w_pivot_df[w_pivot_df['Sample_size_by_weight'].isin(
-                                    values_a_filter)].sample(n=abs(aux_eval))
-                                to_fill_a_w_pivot = pd.DataFrame()
-                                for _, row in a_filt_w_pivot.iterrows():
-                                    temp_fill = o_minus_pre_est_df.loc[(
-                                        o_minus_pre_est_df[par_col_list] == row[par_col_list]).all(axis=1)].sample(n=1)
-                                    to_fill_a_w_pivot = pd.concat(
-                                        [to_fill_a_w_pivot, temp_fill])
-                                est_samp_df = pd.concat(
-                                    [pre_est_samp_df, to_fill_a_w_pivot])
+                                temp_pivot_df = pivot_df.copy()
+                                pre_label = ', '.join(
+                                    str(item for item in par_featureless))
+                                temp_pivot_df[pre_label] = temp_pivot_df.apply(
+                                    lambda row: ', '.join(str(row[item]) for item in par_featureless), axis=1)
+                                for column in pivot_df.columns:
+                                    if column not in par_featureless:
+                                        weight_column_name = f'{column}_weight(%)'
+                                        s_s_col_name = f'{column}_sample_size_by_weight'
+                                        column_feature = column
+                                        pivot_df_2[column_feature] = pivot_df[column]
+                                        pivot_df_2[weight_column_name] = np.round(
+                                            (pivot_df[column] / N) * 100, 4)
+                                        pivot_df_2[s_s_col_name] = np.round(
+                                            (pivot_df[column] / N) * n)
+                                        pivot_sum = pivot_sum + \
+                                            pivot_df_2[s_s_col_name].sum()
+                            if features_ans == 'Yes.':
                                 st.write(
-                                    'Sampled Dataframe given the selected structure:')
-                                st.write(est_samp_df)
-                                # st.write(est_samp_df.shape)
-                                structure_sampled_l_df_csv = est_samp_df.to_csv(
-                                    index=False)
-                                coldos_est_l_1, coldos_est_l_2 = st.columns(
-                                    2, gap='medium')
-
-                                with coldos_est_l_2:
-                                    st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
-                                                       data=structure_sampled_l_df_csv,
-                                                       file_name=f'SAMPLED_STRUCTURE_{file_name_df}.csv',
-                                                       mime='text/csv')
-                            if aux_eval > 0:
-                                sub_d_auxiliar = pd.DataFrame(
-                                    columns=d_auxiliar_df.columns)
-                                temp_d_auxiliar_count = 0
-                                for _, row in d_auxiliar_df.iterrows():
-                                    count = row['Count']
-                                    temp_d_auxiliar_count = temp_d_auxiliar_count + count
-                                    sub_d_auxiliar = pd.concat(
-                                        [sub_d_auxiliar, row.to_frame().T])
-                                    if temp_d_auxiliar_count >= abs(aux_eval):
-                                        break
-                                sub_d_auxiliar = sub_d_auxiliar.reset_index(
-                                    drop=True)
-                                values_d_filter = sub_d_auxiliar['Sample_size_by_weight'].tolist(
-                                )
-                                d_filt_w_pivot = w_pivot_df[w_pivot_df['Sample_size_by_weight'].isin(
-                                    values_d_filter)].sample(n=abs(aux_eval))
-                                to_rem_d_w_pivot = pd.DataFrame()
-                                for _, row in d_filt_w_pivot.iterrows():
-                                    temp_rem = pre_est_samp_df.loc[(
-                                        pre_est_samp_df[par_col_list] == row[par_col_list]).all(axis=1)].sample(n=1)
-                                    to_rem_d_w_pivot = pd.concat(
-                                        [to_rem_d_w_pivot, temp_rem])
-                                pre_merge_to_rem = pd.merge(
-                                    pre_est_samp_df, to_rem_d_w_pivot, how='left', indicator=True)
-                                est_samp_df = pre_merge_to_rem[pre_merge_to_rem['_merge'] == 'left_only'].drop(
-                                    columns='_merge')
-                                st.write(
-                                    'Sampled Dataframe given the selected structure:')
-                                st.write(est_samp_df)
-                                structure_sampled_g_df_csv = est_samp_df.to_csv(
-                                    index=False)
-                                coldos_est_g_1, coldos_est_g_2 = st.columns(
-                                    2, gap='medium')
-
-                                with coldos_est_g_2:
-                                    st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
-                                                       data=structure_sampled_g_df_csv,
-                                                       file_name=f'SAMPLED_STRUCTURE_{file_name_df}.csv',
-                                                       mime='text/csv')
-                            if aux_eval == 0:
-                                est_samp_df = pre_est_samp_df
-                                st.write(
-                                    'Sampled Dataframe given the selected structure:')
-                                st.write(est_samp_df)
-                                structure_sampled_e_df_csv = est_samp_df.to_csv(
-                                    index=False)
-                                coldos_est_e_1, coldos_est_e_2 = st.columns(
-                                    2, gap='medium')
-
-                                with coldos_est_e_2:
-                                    st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
-                                                       data=structure_sampled_e_df_csv,
-                                                       file_name=f'SAMPLED_STRUCTURE_{file_name_df}.csv',
-                                                       mime='text/csv')
-                        if feature_op_ans == 'Yes.':
-                            st.write('Select the **feature** column:')
-                            feat_col_list = st.multiselect(
-                                'This would be the column that determines the features of the Dataframe.', par_col_list, max_selections=1)
-                            if feat_col_list == []:
-                                st.caption('<p style="color: #2e6ef7;">You must select the feature column if you want to continue.</p>',
-                                           unsafe_allow_html=True)
-                                pivot_df = grouped_df
-                                pivot_df_2 = pivot_df
-                            if feat_col_list != []:
-                                features_ans = st.radio('Do you want to select only specific features?',
-                                                        ('No.',
-                                                         'Yes.'))
-                                feature = feat_col_list[0]
-                                par_featureless = [
-                                    item for item in par_col_list if item != feature]
-                                features_list = grouped_df[feature].unique(
-                                ).tolist()
-                                pivot_cols = par_featureless + features_list
-                                if features_ans == 'No.':
-                                    pivot_sum = 0  # Verificación de suma
+                                    'Select the **features** of interest:')
+                                interest_features_list = st.multiselect(
+                                    'This would be the interesting features of the Dataframe.', features_list)
+                                if interest_features_list == []:
+                                    st.caption('<p style="color: #2e6ef7;">You must select at least one feature.</p>',
+                                               unsafe_allow_html=True)
                                     pivot_df = grouped_df.pivot_table(
                                         index=par_featureless, columns=feature, values='Count', fill_value=0).reset_index()
                                     pivot_df = pivot_df.reindex(
@@ -451,27 +482,24 @@ if selected == 'Sampling':
                                                 (pivot_df[column] / N) * 100, 4)
                                             pivot_df_2[s_s_col_name] = np.round(
                                                 (pivot_df[column] / N) * n)
-                                            pivot_sum = pivot_sum + \
-                                                pivot_df_2[s_s_col_name].sum()
-                                if features_ans == 'Yes.':
-                                    st.write(
-                                        'Select the **features** of interest:')
-                                    interest_features_list = st.multiselect(
-                                        'This would be the interesting features of the Dataframe.', features_list)
-                                    if interest_features_list == []:
-                                        st.caption('<p style="color: #2e6ef7;">You must select at least one feature.</p>',
-                                                   unsafe_allow_html=True)
-                                        pivot_df = grouped_df.pivot_table(
-                                            index=par_featureless, columns=feature, values='Count', fill_value=0).reset_index()
-                                        pivot_df = pivot_df.reindex(
-                                            columns=pivot_cols)
-                                        pivot_df_2 = pivot_df[par_featureless].copy(
-                                        )
-                                        temp_pivot_df = pivot_df.copy()
-                                        pre_label = ', '.join(
-                                            str(item for item in par_featureless))
-                                        temp_pivot_df[pre_label] = temp_pivot_df.apply(
-                                            lambda row: ', '.join(str(row[item]) for item in par_featureless), axis=1)
+                                if interest_features_list != []:
+                                    pivot_df = grouped_df.pivot_table(
+                                        index=par_featureless, columns=feature, values='Count', fill_value=0).reset_index()
+                                    pivot_cols_interest = par_featureless + interest_features_list
+                                    pivot_df = pivot_df.reindex(
+                                        columns=pivot_cols_interest)
+                                    pivot_df_2 = pivot_df[par_featureless].copy(
+                                    )
+                                    temp_pivot_df = pivot_df.copy()
+                                    pre_label = ', '.join(
+                                        str(item for item in par_featureless))
+                                    temp_pivot_df[pre_label] = temp_pivot_df.apply(
+                                        lambda row: ', '.join(str(row[item]) for item in par_featureless), axis=1)
+                                    st.write('')
+                                    plot_ans = st.radio('Do you want to plot the weight percentage of the interesting features?',
+                                                        ('No.',
+                                                         'Yes.'))
+                                    if plot_ans == 'No.':
                                         for column in pivot_df.columns:
                                             if column not in par_featureless:
                                                 weight_column_name = f'{column}_weight(%)'
@@ -482,224 +510,196 @@ if selected == 'Sampling':
                                                     (pivot_df[column] / N) * 100, 4)
                                                 pivot_df_2[s_s_col_name] = np.round(
                                                     (pivot_df[column] / N) * n)
-                                    if interest_features_list != []:
-                                        pivot_df = grouped_df.pivot_table(
-                                            index=par_featureless, columns=feature, values='Count', fill_value=0).reset_index()
-                                        pivot_cols_interest = par_featureless + interest_features_list
-                                        pivot_df = pivot_df.reindex(
-                                            columns=pivot_cols_interest)
-                                        pivot_df_2 = pivot_df[par_featureless].copy(
-                                        )
-                                        temp_pivot_df = pivot_df.copy()
-                                        pre_label = ', '.join(
-                                            str(item for item in par_featureless))
-                                        temp_pivot_df[pre_label] = temp_pivot_df.apply(
-                                            lambda row: ', '.join(str(row[item]) for item in par_featureless), axis=1)
-                                        st.write('')
-                                        plot_ans = st.radio('Do you want to plot the weight percentage of the interesting features?',
-                                                            ('No.',
-                                                             'Yes.'))
-                                        if plot_ans == 'No.':
-                                            for column in pivot_df.columns:
-                                                if column not in par_featureless:
-                                                    weight_column_name = f'{column}_weight(%)'
-                                                    s_s_col_name = f'{column}_sample_size_by_weight'
-                                                    column_feature = column
-                                                    pivot_df_2[column_feature] = pivot_df[column]
-                                                    pivot_df_2[weight_column_name] = np.round(
-                                                        (pivot_df[column] / N) * 100, 4)
-                                                    pivot_df_2[s_s_col_name] = np.round(
-                                                        (pivot_df[column] / N) * n)
-                                        if plot_ans == 'Yes.':
-                                            st.caption(
-                                                'You can download the figures by using the right click method.')
-                                            for column in pivot_df.columns:
-                                                if column not in par_featureless:
-                                                    weight_column_name = f'{column}_weight(%)'
-                                                    s_s_col_name = f'{column}_sample_size_by_weight'
-                                                    column_feature = column
-                                                    pivot_df_2[column_feature] = pivot_df[column]
-                                                    pivot_df_2[weight_column_name] = np.round(
-                                                        (pivot_df[column] / N) * 100, 4)
-                                                    pivot_df_2[s_s_col_name] = np.round(
-                                                        (pivot_df[column] / N) * n)
-                                                    labels = temp_pivot_df[pre_label]
-                                                    weights = pivot_df_2[weight_column_name]
-                                                    color_blue = '#2E6EF7'  # niq_blue
-                                                    color_orange = '#F05E19'  # niq_orange
-                                                    fig, ax = plt.subplots()
-                                                    ax.bar(
-                                                        labels, weights, color=color_blue)
-                                                    ax.set_title(column)
-                                                    ax.set_xlabel(
-                                                        ', '.join(str(item) for item in par_featureless))
-                                                    ax.set_ylabel(
-                                                        'Weight(%)')
-                                                    ax.tick_params(
-                                                        axis='x', labelsize=5)
-                                                    ax.tick_params(
-                                                        axis='y', labelsize=8)
-                                                    plt.xticks(rotation=90)
-                                                    st.pyplot(fig)
+                                    if plot_ans == 'Yes.':
+                                        st.caption(
+                                            'You can download the figures by using the right click method.')
+                                        for column in pivot_df.columns:
+                                            if column not in par_featureless:
+                                                weight_column_name = f'{column}_weight(%)'
+                                                s_s_col_name = f'{column}_sample_size_by_weight'
+                                                column_feature = column
+                                                pivot_df_2[column_feature] = pivot_df[column]
+                                                pivot_df_2[weight_column_name] = np.round(
+                                                    (pivot_df[column] / N) * 100, 4)
+                                                pivot_df_2[s_s_col_name] = np.round(
+                                                    (pivot_df[column] / N) * n)
+                                                labels = temp_pivot_df[pre_label]
+                                                weights = pivot_df_2[weight_column_name]
+                                                color_blue = '#2E6EF7'  # niq_blue
+                                                color_orange = '#F05E19'  # niq_orange
+                                                fig, ax = plt.subplots()
+                                                ax.bar(
+                                                    labels, weights, color=color_blue)
+                                                ax.set_title(column)
+                                                ax.set_xlabel(
+                                                    ', '.join(str(item) for item in par_featureless))
+                                                ax.set_ylabel(
+                                                    'Weight(%)')
+                                                ax.tick_params(
+                                                    axis='x', labelsize=5)
+                                                ax.tick_params(
+                                                    axis='y', labelsize=8)
+                                                plt.xticks(rotation=90)
+                                                st.pyplot(fig)
 
-                                st.write(
-                                    'Weighted Dataframe pivot given the selected structure and feature column:')
-                                st.write(pivot_df_2)
-                                pivot_featured_df_csv = pivot_df_2.to_csv(
-                                    index=False)
-                                coldos_est_feat_1, coldos_est_feat_2 = st.columns(
-                                    2, gap='medium')
-
-                                with coldos_est_feat_2:
-                                    st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
-                                                       data=pivot_featured_df_csv,
-                                                       file_name=f'PIVOT_FEATURE_STRUCTURE_{file_name_df}.csv',
-                                                       mime='text/csv')
-
-                            pivot_df = grouped_df
-                            w_pivot_df = pivot_df.copy()
-                            for column in pivot_df.columns:
-                                if column == 'Count':
-                                    weight_column_name = f'Weight(%)'
-                                    s_s_col_name = f'Sample_size_by_weight'
-                                    column_feature = column
-                                    w_pivot_df[column_feature] = pivot_df[column]
-                                    w_pivot_df[weight_column_name] = np.round(
-                                        (pivot_df[column] / N) * 100, 4)
-                                    w_pivot_df[s_s_col_name] = np.round(
-                                        (pivot_df[column] / N) * n)
                             st.write(
-                                'Weighted Dataframe pivot given the selected structure:')
-                            st.write(w_pivot_df)
-                            pivot_structure_sampled_df_csv = w_pivot_df.to_csv(
+                                'Weighted Dataframe pivot given the selected structure and feature column:')
+                            st.write(pivot_df_2)
+                            pivot_featured_df_csv = pivot_df_2.to_csv(
                                 index=False)
-                            coldos_pivot_1, coldos_pivot_2 = st.columns(
+                            coldos_est_feat_1, coldos_est_feat_2 = st.columns(
                                 2, gap='medium')
 
-                            with coldos_pivot_2:
+                            with coldos_est_feat_2:
                                 st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
-                                                   data=pivot_structure_sampled_df_csv,
-                                                   file_name=f'PIVOT_STRUCTURE_{file_name_df}.csv',
+                                                   data=pivot_featured_df_csv,
+                                                   file_name=f'PIVOT_FEATURE_STRUCTURE_{file_name_df}.csv',
                                                    mime='text/csv')
-                            pre_est_samp_df = pd.DataFrame(columns=o_df_cols)
-                            o_l_df = o_df.copy()
-                            st.write('')
-                            for _, row in w_pivot_df.iterrows():
-                                temp_indices_list = []
-                                n_temp = int(row['Sample_size_by_weight'])
-                                filt_w_pivot_df = o_l_df.loc[(
-                                    o_l_df[par_col_list] == row[par_col_list]).all(axis=1)]
-                                incomplete_est_samp_rows = filt_w_pivot_df.sample(
-                                    n=n_temp)
-                                pre_est_samp_df = pd.concat(
-                                    [pre_est_samp_df, incomplete_est_samp_rows])
-                                temp_indices_list.extend(
-                                    incomplete_est_samp_rows.index.tolist())
-                                o_l_df = o_l_df.drop(temp_indices_list)
-                            o_merge_pre_est_df = pd.merge(
-                                o_df, pre_est_samp_df, how='left', indicator=True)
-                            o_minus_pre_est_df = o_merge_pre_est_df[o_merge_pre_est_df['_merge'] == 'left_only'].drop(
+
+                        pivot_df = grouped_df
+                        w_pivot_df = pivot_df.copy()
+                        for column in pivot_df.columns:
+                            if column == 'Count':
+                                weight_column_name = f'Weight(%)'
+                                s_s_col_name = f'Sample_size_by_weight'
+                                column_feature = column
+                                w_pivot_df[column_feature] = pivot_df[column]
+                                w_pivot_df[weight_column_name] = np.round(
+                                    (pivot_df[column] / N) * 100, 4)
+                                w_pivot_df[s_s_col_name] = np.round(
+                                    (pivot_df[column] / N) * n)
+                        st.write(
+                            'Weighted Dataframe pivot given the selected structure:')
+                        st.write(w_pivot_df)
+                        pivot_structure_sampled_df_csv = w_pivot_df.to_csv(
+                            index=False)
+                        coldos_pivot_1, coldos_pivot_2 = st.columns(
+                            2, gap='medium')
+
+                        with coldos_pivot_2:
+                            st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
+                                               data=pivot_structure_sampled_df_csv,
+                                               file_name=f'PIVOT_STRUCTURE_{file_name_df}.csv',
+                                               mime='text/csv')
+                        pre_est_samp_df = pd.DataFrame(columns=o_df_cols)
+                        o_l_df = o_df.copy()
+                        st.write('')
+                        for _, row in w_pivot_df.iterrows():
+                            temp_indices_list = []
+                            n_temp = int(row['Sample_size_by_weight'])
+                            filt_w_pivot_df = o_l_df.loc[(
+                                o_l_df[par_col_list] == row[par_col_list]).all(axis=1)]
+                            incomplete_est_samp_rows = filt_w_pivot_df.sample(
+                                n=n_temp)
+                            pre_est_samp_df = pd.concat(
+                                [pre_est_samp_df, incomplete_est_samp_rows])
+                            temp_indices_list.extend(
+                                incomplete_est_samp_rows.index.tolist())
+                            o_l_df = o_l_df.drop(temp_indices_list)
+                        o_merge_pre_est_df = pd.merge(
+                            o_df, pre_est_samp_df, how='left', indicator=True)
+                        o_minus_pre_est_df = o_merge_pre_est_df[o_merge_pre_est_df['_merge'] == 'left_only'].drop(
+                            columns='_merge')
+                        a_auxiliar_df = w_pivot_df['Sample_size_by_weight'].value_counts(
+                        ).sort_index().reset_index()
+                        a_auxiliar_df.columns = [
+                            'Sample_size_by_weight', 'Count']
+                        d_auxiliar_df = a_auxiliar_df.sort_values(
+                            'Sample_size_by_weight', ascending=False)
+                        aux_eval = pre_est_samp_df.shape[0] - n
+                        if aux_eval < 0:
+                            sub_a_auxiliar = pd.DataFrame(
+                                columns=a_auxiliar_df.columns)
+                            temp_a_auxiliar_count = 0
+                            for _, row in a_auxiliar_df.iterrows():
+                                count = row['Count']
+                                temp_a_auxiliar_count = temp_a_auxiliar_count + count
+                                sub_a_auxiliar = pd.concat(
+                                    [sub_a_auxiliar, row.to_frame().T])
+                                if temp_a_auxiliar_count >= abs(aux_eval):
+                                    break
+                            sub_a_auxiliar = sub_a_auxiliar.reset_index(
+                                drop=True)
+                            values_a_filter = sub_a_auxiliar['Sample_size_by_weight'].tolist(
+                            )
+                            a_filt_w_pivot = w_pivot_df[w_pivot_df['Sample_size_by_weight'].isin(
+                                values_a_filter)].sample(n=abs(aux_eval))
+                            to_fill_a_w_pivot = pd.DataFrame()
+                            for _, row in a_filt_w_pivot.iterrows():
+                                temp_fill = o_minus_pre_est_df.loc[(
+                                    o_minus_pre_est_df[par_col_list] == row[par_col_list]).all(axis=1)].sample(n=1)
+                                to_fill_a_w_pivot = pd.concat(
+                                    [to_fill_a_w_pivot, temp_fill])
+                            est_samp_df = pd.concat(
+                                [pre_est_samp_df, to_fill_a_w_pivot])
+                            st.write(
+                                'Sampled Dataframe given the selected structure:')
+                            st.write(est_samp_df)
+                            structure_sampled_l_df_csv = est_samp_df.to_csv(
+                                index=False)
+                            coldos_est_l_1, coldos_est_l_2 = st.columns(
+                                2, gap='medium')
+
+                            with coldos_est_l_2:
+                                st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
+                                                   data=structure_sampled_l_df_csv,
+                                                   file_name=f'SAMPLED_STRUCTURE_{file_name_df}.csv',
+                                                   mime='text/csv')
+                        if aux_eval > 0:
+                            sub_d_auxiliar = pd.DataFrame(
+                                columns=d_auxiliar_df.columns)
+                            temp_d_auxiliar_count = 0
+                            for _, row in d_auxiliar_df.iterrows():
+                                count = row['Count']
+                                temp_d_auxiliar_count = temp_d_auxiliar_count + count
+                                sub_d_auxiliar = pd.concat(
+                                    [sub_d_auxiliar, row.to_frame().T])
+                                if temp_d_auxiliar_count >= abs(aux_eval):
+                                    break
+                            sub_d_auxiliar = sub_d_auxiliar.reset_index(
+                                drop=True)
+                            values_d_filter = sub_d_auxiliar['Sample_size_by_weight'].tolist(
+                            )
+                            d_filt_w_pivot = w_pivot_df[w_pivot_df['Sample_size_by_weight'].isin(
+                                values_d_filter)].sample(n=abs(aux_eval))
+                            to_rem_d_w_pivot = pd.DataFrame()
+                            for _, row in d_filt_w_pivot.iterrows():
+                                temp_rem = pre_est_samp_df.loc[(
+                                    pre_est_samp_df[par_col_list] == row[par_col_list]).all(axis=1)].sample(n=1)
+                                to_rem_d_w_pivot = pd.concat(
+                                    [to_rem_d_w_pivot, temp_rem])
+                            pre_merge_to_rem = pd.merge(
+                                pre_est_samp_df, to_rem_d_w_pivot, how='left', indicator=True)
+                            est_samp_df = pre_merge_to_rem[pre_merge_to_rem['_merge'] == 'left_only'].drop(
                                 columns='_merge')
-                            a_auxiliar_df = w_pivot_df['Sample_size_by_weight'].value_counts(
-                            ).sort_index().reset_index()
-                            a_auxiliar_df.columns = [
-                                'Sample_size_by_weight', 'Count']
-                            d_auxiliar_df = a_auxiliar_df.sort_values(
-                                'Sample_size_by_weight', ascending=False)
-                            aux_eval = pre_est_samp_df.shape[0] - n
-                            if aux_eval < 0:
-                                sub_a_auxiliar = pd.DataFrame(
-                                    columns=a_auxiliar_df.columns)
-                                temp_a_auxiliar_count = 0
-                                for _, row in a_auxiliar_df.iterrows():
-                                    count = row['Count']
-                                    temp_a_auxiliar_count = temp_a_auxiliar_count + count
-                                    sub_a_auxiliar = pd.concat(
-                                        [sub_a_auxiliar, row.to_frame().T])
-                                    if temp_a_auxiliar_count >= abs(aux_eval):
-                                        break
-                                sub_a_auxiliar = sub_a_auxiliar.reset_index(
-                                    drop=True)
-                                values_a_filter = sub_a_auxiliar['Sample_size_by_weight'].tolist(
-                                )
-                                a_filt_w_pivot = w_pivot_df[w_pivot_df['Sample_size_by_weight'].isin(
-                                    values_a_filter)].sample(n=abs(aux_eval))
-                                to_fill_a_w_pivot = pd.DataFrame()
-                                for _, row in a_filt_w_pivot.iterrows():
-                                    temp_fill = o_minus_pre_est_df.loc[(
-                                        o_minus_pre_est_df[par_col_list] == row[par_col_list]).all(axis=1)].sample(n=1)
-                                    to_fill_a_w_pivot = pd.concat(
-                                        [to_fill_a_w_pivot, temp_fill])
-                                est_samp_df = pd.concat(
-                                    [pre_est_samp_df, to_fill_a_w_pivot])
-                                st.write(
-                                    'Sampled Dataframe given the selected structure:')
-                                st.write(est_samp_df)
-                                structure_sampled_l_df_csv = est_samp_df.to_csv(
-                                    index=False)
-                                coldos_est_l_1, coldos_est_l_2 = st.columns(
-                                    2, gap='medium')
+                            st.write(
+                                'Sampled Dataframe given the selected structure:')
+                            st.write(est_samp_df)
+                            structure_sampled_g_df_csv = est_samp_df.to_csv(
+                                index=False)
+                            coldos_est_g_1, coldos_est_g_2 = st.columns(
+                                2, gap='medium')
 
-                                with coldos_est_l_2:
-                                    st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
-                                                       data=structure_sampled_l_df_csv,
-                                                       file_name=f'SAMPLED_STRUCTURE_{file_name_df}.csv',
-                                                       mime='text/csv')
-                            if aux_eval > 0:
-                                sub_d_auxiliar = pd.DataFrame(
-                                    columns=d_auxiliar_df.columns)
-                                temp_d_auxiliar_count = 0
-                                for _, row in d_auxiliar_df.iterrows():
-                                    count = row['Count']
-                                    temp_d_auxiliar_count = temp_d_auxiliar_count + count
-                                    sub_d_auxiliar = pd.concat(
-                                        [sub_d_auxiliar, row.to_frame().T])
-                                    if temp_d_auxiliar_count >= abs(aux_eval):
-                                        break
-                                sub_d_auxiliar = sub_d_auxiliar.reset_index(
-                                    drop=True)
-                                values_d_filter = sub_d_auxiliar['Sample_size_by_weight'].tolist(
-                                )
-                                d_filt_w_pivot = w_pivot_df[w_pivot_df['Sample_size_by_weight'].isin(
-                                    values_d_filter)].sample(n=abs(aux_eval))
-                                to_rem_d_w_pivot = pd.DataFrame()
-                                for _, row in d_filt_w_pivot.iterrows():
-                                    temp_rem = pre_est_samp_df.loc[(
-                                        pre_est_samp_df[par_col_list] == row[par_col_list]).all(axis=1)].sample(n=1)
-                                    to_rem_d_w_pivot = pd.concat(
-                                        [to_rem_d_w_pivot, temp_rem])
-                                pre_merge_to_rem = pd.merge(
-                                    pre_est_samp_df, to_rem_d_w_pivot, how='left', indicator=True)
-                                est_samp_df = pre_merge_to_rem[pre_merge_to_rem['_merge'] == 'left_only'].drop(
-                                    columns='_merge')
-                                st.write(
-                                    'Sampled Dataframe given the selected structure:')
-                                st.write(est_samp_df)
-                                structure_sampled_g_df_csv = est_samp_df.to_csv(
-                                    index=False)
-                                coldos_est_g_1, coldos_est_g_2 = st.columns(
-                                    2, gap='medium')
+                            with coldos_est_g_2:
+                                st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
+                                                   data=structure_sampled_g_df_csv,
+                                                   file_name=f'SAMPLED_STRUCTURE_{file_name_df}.csv',
+                                                   mime='text/csv')
+                        if aux_eval == 0:
+                            est_samp_df = pre_est_samp_df
+                            st.write(
+                                'Sampled Dataframe given the selected structure:')
+                            st.write(est_samp_df)
+                            structure_sampled_e_df_csv = est_samp_df.to_csv(
+                                index=False)
+                            coldos_est_e_1, coldos_est_e_2 = st.columns(
+                                2, gap='medium')
 
-                                with coldos_est_g_2:
-                                    st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
-                                                       data=structure_sampled_g_df_csv,
-                                                       file_name=f'SAMPLED_STRUCTURE_{file_name_df}.csv',
-                                                       mime='text/csv')
-                            if aux_eval == 0:
-                                est_samp_df = pre_est_samp_df
-                                st.write(
-                                    'Sampled Dataframe given the selected structure:')
-                                st.write(est_samp_df)
-                                structure_sampled_e_df_csv = est_samp_df.to_csv(
-                                    index=False)
-                                coldos_est_e_1, coldos_est_e_2 = st.columns(
-                                    2, gap='medium')
-
-                                with coldos_est_e_2:
-                                    st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
-                                                       data=structure_sampled_e_df_csv,
-                                                       file_name=f'SAMPLED_STRUCTURE_{file_name_df}.csv',
-                                                       mime='text/csv')
+                            with coldos_est_e_2:
+                                st.download_button(label=':floppy_disk: Download Dataframe as CSV :floppy_disk:',
+                                                   data=structure_sampled_e_df_csv,
+                                                   file_name=f'SAMPLED_STRUCTURE_{file_name_df}.csv',
+                                                   mime='text/csv')
 
                 st.write('')
                 st.write('Don\'t forget to **download** your sampled Dataframe.')
