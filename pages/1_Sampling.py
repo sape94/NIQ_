@@ -95,24 +95,16 @@ if selected == 'Sampling':
 
     with st.expander('If you want to upload a Dataframe, expand this section. When you finish you can collapse it again.'):
         st.write(
-            'Upload the CSV or XLSX file that contains the working Dataframe:')
+            'Upload the CSV file that contains the working Dataframe:')
         uploaded_file = st.file_uploader("Choose a file",
-                                         type=['csv', 'xlsx'],
+                                         type=['csv'],
                                          key='gral_settings_df'
                                          )
         if uploaded_file is not None:
-            try:
-                o_df = pd.read_csv(uploaded_file, encoding='UTF8')
-            except:
-                o_df = pd.read_excel(uploaded_file, encoding='UTF8')
+            o_df = pd.read_csv(uploaded_file, encoding='UTF8')
 
-            try:
-                file_name_df = uploaded_file.name.replace('.csv', '')
-            except:
-                try:
-                    file_name_df = uploaded_file.name.replace('.xlsx', '')
-                except:
-                    pass
+            file_name_df = uploaded_file.name.replace('.csv', '')
+            
             st.write(o_df)
 
     st.markdown('')
