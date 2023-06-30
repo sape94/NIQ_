@@ -80,7 +80,7 @@ if selected == 'Sampling':
         st.write(
             'Upload the CSV file that contains the working Dataframe:')
         uploaded_file = st.file_uploader("Choose a file",
-                                         type=['csv', 'xlsx'],
+                                         type=['csv'],
                                          key='gral_settings_df'
                                          )
         if uploaded_file is not None:
