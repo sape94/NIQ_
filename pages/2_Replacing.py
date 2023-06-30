@@ -84,24 +84,17 @@ if selected == 'Replacing':
             st.write(o_df)
         st.caption('You can collapse this section if you want.')
     st.markdown('')
-    with st.expander('Upload the CSV or XLSX file that contains the  **Working Dataframe**:'):
+    with st.expander('Upload the CSV file that contains the  **Working Dataframe**:'):
         uploaded_file_2 = st.file_uploader("Choose a file",
-                                           type=['csv', 'xlsx'],
+                                           type=['csv'],
                                            key='working_df'
                                            )
         if uploaded_file_2 is not None:
-            try:
-                no_df = pd.read_csv(uploaded_file_2, encoding='UTF8')
-            except:
-                no_df = pd.read_excel(uploaded_file_2, encoding='UTF8')
-
-            try:
-                file_name_df = uploaded_file_2.name.replace('.csv', '')
-            except:
-                try:
-                    file_name_df = uploaded_file_2.name.replace('.xlsx', '')
-                except:
-                    pass
+            
+            no_df = pd.read_csv(uploaded_file_2, encoding='UTF8')
+            
+            file_name_df = uploaded_file_2.name.replace('.csv', '')
+            
             no_df = cache_df_2(no_df)
             st.write(no_df)
         st.caption('You can collapse this section if you want.')
