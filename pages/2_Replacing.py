@@ -165,7 +165,7 @@ if selected == 'Replacing':
 
             if rmv_ans == 'Upload a Dataframe that contains the items you want to remove.':
                 up_rmv_file = st.file_uploader("Choose a file",
-                                               type=['csv', 'xlsx'],
+                                               type=['csv'],
                                                key='settings_df'
                                                )
 
