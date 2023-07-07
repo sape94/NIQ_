@@ -143,7 +143,7 @@ if selected == 'Sampling':
         st.write(r'Select, $e$, the **standard error**(%):')
         s_e = st.selectbox(
             r'',
-            ('1', '2', '5', '10', '20'))
+            ('1', '2', '3', '4', '5', '10', '20'))
 
     with col4:
         if uploaded_file is not None:
