@@ -206,6 +206,43 @@ if selected == 'Sampling':
         unsafe_allow_html=True)
     st.header('')
 
+    subhead_app_7 = '''
+    <style>
+    .subhead-item {
+        backgroundcolor: transparent;
+    }
+    .subhead-item:hover {
+        color: #2E6EF7;
+    }
+    </style>
+
+    <a style='display: inline; text-align: left; color: #31333F
+    ; text-decoration: none; '
+    href="/Sample_size_from_structure" target="_self">
+    <h3 class="subhead-item">
+    Sample Size from Structure
+    </h3>
+    </a>
+    '''
+    st.write(subhead_app_7, unsafe_allow_html=True)
+    app_7_topic = 'Description'
+    st.write(
+        f'''<div style="text-align: left; color: #31d1ff;">
+        {app_7_topic}</div>''',
+        unsafe_allow_html=True)
+    app_7_cap = f'''
+    By uploading a Dataframe and selecting a structure of given Dataframe you can
+    obtain its sample size per row and its wieghted sample size per row. You can do
+    it by uploading the Master Dataframe or the Pivot.
+    '''
+    st.caption(
+        f'''
+        <div style="text-align: justify;
+        margin-top: 5px;
+        ">{app_7_cap}</div>''',
+        unsafe_allow_html=True)
+    st.header('')
+
 if selected == 'Replacing':
     switch_page('Replacing')
 
@@ -252,7 +289,7 @@ text-align:
 left;' href="https://github.com/sape94" target="_blank">
 <img src="https://i.postimg.cc/vBnHmZfF/innovation-logo.png"
 alt="AI" height= "20"/><br>LatAm's Automation & Innovation Team.
-</br></a>Version 1.3.0-b.1.</p>
+</br></a>Version 1.4.1-b.1.</p>
 </div>
 </div>
 """
