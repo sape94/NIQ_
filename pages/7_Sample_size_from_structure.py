@@ -128,7 +128,7 @@ if selected == 'Sampling':
                     pivot = pivot.rename_axis('', axis='columns')
                     st.write('')
                     st.write('')
-                    with st.expander('Expand this section if you want to see and download your Pivot.'):
+                    with st.expander('Expand this section if you want to see and download your Summary.'):
                         st.markdown('This is the generated Summary dataframe:')
                         st.write(pivot)
                         pivot_csv = pivot.to_csv(index=False)
